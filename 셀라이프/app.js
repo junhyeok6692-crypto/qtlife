@@ -98,17 +98,38 @@ const db = {
   async loadFromSupabase() {
     const sb = getSupabase(); const uid = getCurrentUserId();
     if (!sb || !uid) return;
+
+    const localQts = this.getAllQts();
     const { data, error } = await sb.from('qts').select('*').eq('user_id', uid);
     if (error) { console.error('Supabase load error:', error); return; }
-    if (data && data.length > 0) {
-      const qts = data.map(r => ({
-        id: r.date, date: r.date, passage: r.passage || '', scripture: r.scripture || '',
-        title: r.title || '', understanding: r.understanding || '', whoIsGod: r.who_is_god || '',
-        graceAndThanks: r.grace_and_thanks || '', lesson: r.lesson || '',
-        application: r.application || '', prayer: r.prayer || ''
-      })).sort((a, b) => b.date.localeCompare(a.date));
-      localStorage.setItem(this._k('qts'), JSON.stringify(qts));
+
+    const remoteQts = (data || []).map(r => ({
+      id: r.date, date: r.date, passage: r.passage || '', scripture: r.scripture || '',
+      title: r.title || '', understanding: r.understanding || '', whoIsGod: r.who_is_god || '',
+      graceAndThanks: r.grace_and_thanks || '', lesson: r.lesson || '',
+      application: r.application || '', prayer: r.prayer || ''
+    }));
+
+    // 로컬에만 있는 항목 → Supabase에 업로드
+    const remoteDates = new Set(remoteQts.map(q => q.date));
+    const toUpload = localQts.filter(q => !remoteDates.has(q.date));
+    if (toUpload.length > 0) {
+      const rows = toUpload.map(qt => ({
+        user_id: uid, date: qt.date, passage: qt.passage || '', scripture: qt.scripture || '',
+        title: qt.title || '', understanding: qt.understanding || '', who_is_god: qt.whoIsGod || '',
+        grace_and_thanks: qt.graceAndThanks || '', lesson: qt.lesson || '',
+        application: qt.application || '', prayer: qt.prayer || '',
+        updated_at: new Date().toISOString()
+      }));
+      await sb.from('qts').upsert(rows);
     }
+
+    // 전체 병합 (같은 날짜면 Supabase 우선, 로컬에만 있으면 추가)
+    const merged = new Map();
+    localQts.forEach(q => merged.set(q.date, q));
+    remoteQts.forEach(q => merged.set(q.date, q));
+    const finalQts = Array.from(merged.values()).sort((a, b) => b.date.localeCompare(a.date));
+    localStorage.setItem(this._k('qts'), JSON.stringify(finalQts));
   },
 
   getTheme() { return localStorage.getItem(this._k('theme')) || 'light'; },
