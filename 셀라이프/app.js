@@ -484,7 +484,7 @@ const app = {
     location.reload();
   },
 
-  changePassword(newPw, confirmPw) {
+  async changePassword(newPw, confirmPw) {
     if (!newPw) { this.showToast('새 비밀번호를 입력하세요.'); return; }
     if (newPw.length < 6) { this.showToast('비밀번호는 6자 이상이어야 합니다.'); return; }
     if (!/[a-zA-Z]/.test(newPw) || !/[0-9]/.test(newPw)) { this.showToast('영문과 숫자를 모두 포함해야 합니다.'); return; }
@@ -492,6 +492,8 @@ const app = {
     const profileId = window._currentProfileId;
     if (!profileId) { this.showToast('프로필 정보를 찾을 수 없습니다.'); return; }
     localStorage.setItem('qt_pin_' + profileId, newPw);
+    const sb = getSupabase();
+    if (sb) await sb.from('user_pins').upsert({ profile_id: profileId, pin: newPw });
     document.getElementById('input-new-pw').value = '';
     document.getElementById('input-confirm-pw').value = '';
     this.showToast('비밀번호가 변경되었습니다.');

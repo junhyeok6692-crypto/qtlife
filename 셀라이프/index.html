@@ -120,12 +120,32 @@
       selectedProfile = null;
     });
 
-    // 로그인 (로컬 PIN 검증)
-    function doLogin() {
+    // 로그인 (Supabase PIN 검증, 오프라인시 로컬 캐시)
+    async function doLogin() {
       if (!selectedProfile) return;
       var pw = document.getElementById('auth-pw-input').value;
       if (!pw) { showPwMsg('비밀번호를 입력하세요.'); return; }
-      var storedPin = localStorage.getItem('qt_pin_' + selectedProfile.id) || DEFAULT_PIN;
+      var btn = document.getElementById('btn-auth-pw-login');
+      btn.textContent = '확인 중...'; btn.disabled = true;
+
+      var storedPin = DEFAULT_PIN;
+      try {
+        if (window._supabaseClient) {
+          var r = await window._supabaseClient.from('user_pins').select('pin').eq('profile_id', selectedProfile.id).single();
+          if (r.data && r.data.pin) {
+            storedPin = r.data.pin;
+            localStorage.setItem('qt_pin_' + selectedProfile.id, storedPin);
+          } else {
+            storedPin = localStorage.getItem('qt_pin_' + selectedProfile.id) || DEFAULT_PIN;
+          }
+        } else {
+          storedPin = localStorage.getItem('qt_pin_' + selectedProfile.id) || DEFAULT_PIN;
+        }
+      } catch(e) {
+        storedPin = localStorage.getItem('qt_pin_' + selectedProfile.id) || DEFAULT_PIN;
+      }
+
+      btn.textContent = '로그인'; btn.disabled = false;
       if (pw !== storedPin) { showPwMsg('비밀번호가 올바르지 않습니다.'); return; }
       window._currentUserId = selectedProfile.uuid;
       window._currentUserName = selectedProfile.name;
