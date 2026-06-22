@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="QT라이프 - 모바일 QT 묵상 도우미">
+  <title>QT라이프 QT</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="lucide.min.js"></script>
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="light-mode">
+
+  <!-- 프로필 선택 화면 -->
+  <div id="profile-select" style="display:none;">
+    <div class="profile-select-box">
+      <div class="pin-bird">🕊️</div>
+      <h1 class="pin-title">QT라이프</h1>
+      <p class="pin-subtitle">계정을 선택하세요</p>
+      <div class="profile-grid" id="profile-grid"></div>
+    </div>
+  </div>
+
+  <!-- 프로필 PIN 화면 -->
+  <div id="profile-pin-overlay" style="display:none;">
+    <div class="pin-box" id="profile-pin-box">
+      <div class="profile-pin-avatar" id="profile-pin-avatar"></div>
+      <h1 class="pin-title" id="profile-pin-name"></h1>
+      <p class="pin-subtitle">암호를 입력하세요</p>
+      <div class="pin-dots" id="profile-pin-dots">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <p class="pin-error-msg" id="profile-pin-error"></p>
+      <div class="pin-pad">
+        <button class="pin-key profile-pin-key" data-k="1">1</button>
+        <button class="pin-key profile-pin-key" data-k="2">2</button>
+        <button class="pin-key profile-pin-key" data-k="3">3</button>
+        <button class="pin-key profile-pin-key" data-k="4">4</button>
+        <button class="pin-key profile-pin-key" data-k="5">5</button>
+        <button class="pin-key profile-pin-key" data-k="6">6</button>
+        <button class="pin-key profile-pin-key" data-k="7">7</button>
+        <button class="pin-key profile-pin-key" data-k="8">8</button>
+        <button class="pin-key profile-pin-key" data-k="9">9</button>
+        <button class="pin-key pin-key-del profile-pin-key" data-k="del">⌫</button>
+        <button class="pin-key profile-pin-key" data-k="0">0</button>
+        <div></div>
+      </div>
+      <button id="btn-back-to-profiles" class="profile-back-btn">← 다른 계정</button>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    var DEFAULT_PROFILES = [
+      { id: 'junhyeok', name: '준혁', pin: '0532' },
+      { id: 'dongok',   name: '동옥', pin: '0000' },
+      { id: 'geumhui',  name: '금희', pin: '0000' },
+      { id: 'yein',     name: '예인', pin: '0000' },
+      { id: 'huiwon',   name: '희원', pin: '0000' }
+    ];
+
+    var profileSelectEl = document.getElementById('profile-select');
+    var profilePinEl    = document.getElementById('profile-pin-overlay');
+    var profilePinBox   = document.getElementById('profile-pin-box');
+    var profilePinDots  = document.querySelectorAll('#profile-pin-dots span');
+    var profileErrEl    = document.getElementById('profile-pin-error');
+
+    var profileEntered = '';
+    var selectedProfile = null;
+
+    function getStoredProfiles() {
+      try {
+        var s = localStorage.getItem('cell_life_profiles');
+        if (s) {
+          var profiles = JSON.parse(s);
+          var changed = false;
+          DEFAULT_PROFILES.forEach(function(dp) {
+            if (!profiles.find(function(p) { return p.id === dp.id; })) {
+              profiles.push(dp);
+              changed = true;
+            }
+          });
+          if (changed) localStorage.setItem('cell_life_profiles', JSON.stringify(profiles));
+          return profiles;
+        }
+      } catch(e) {}
+      return DEFAULT_PROFILES;
+    }
+    function updateDots(entered) {
+      profilePinDots.forEach(function(d, i) { d.classList.toggle('filled', i < entered.length); });
+    }
+    function shake(el) {
+      el.classList.add('pin-shake');
+      setTimeout(function() { el.classList.remove('pin-shake'); }, 450);
+    }
+
+    function makeProfileCard(p) {
+      var btn = document.createElement('button');
+      btn.className = 'profile-card';
+      btn.innerHTML = '<div class="profile-avatar">' + p.name[0] + '</div><span class="profile-name">' + p.name + '</span>';
+      btn.addEventListener('click', function() {
+        selectedProfile = p;
+        profileEntered = '';
+        updateDots(profileEntered);
+        profileErrEl.textContent = '';
+        document.getElementById('profile-pin-avatar').textContent = p.name[0];
+        document.getElementById('profile-pin-name').textContent = p.name;
+        profileSelectEl.style.display = 'none';
+        profilePinEl.style.display = 'flex';
+      });
+      return btn;
+    }
+    function showProfileSelect() {
+      profileSelectEl.style.display = 'flex';
+      var grid = document.getElementById('profile-grid');
+      grid.innerHTML = '';
+      var profiles = getStoredProfiles();
+      var row1Ids = ['dongok', 'geumhui'];
+      var row2Ids = ['junhyeok', 'yein', 'huiwon'];
+      var row1 = document.createElement('div'); row1.className = 'profile-row';
+      var row2 = document.createElement('div'); row2.className = 'profile-row';
+      row1Ids.forEach(function(id) {
+        var p = profiles.find(function(x) { return x.id === id; });
+        if (p) row1.appendChild(makeProfileCard(p));
+      });
+      row2Ids.forEach(function(id) {
+        var p = profiles.find(function(x) { return x.id === id; });
+        if (p) row2.appendChild(makeProfileCard(p));
+      });
+      grid.appendChild(row1);
+      grid.appendChild(row2);
+    }
+
+    function tryUnlockProfile() {
+      var profiles = getStoredProfiles();
+      var p = profiles.find(function(x) { return x.id === selectedProfile.id; });
+      var correctPin = p ? p.pin : selectedProfile.pin;
+      if (profileEntered === correctPin) {
+        sessionStorage.setItem('clf_profile', selectedProfile.id);
+        profilePinEl.style.display = 'none';
+        if (typeof window._appInitCallback === 'function') window._appInitCallback();
+      } else {
+        profileErrEl.textContent = '암호가 틀렸습니다';
+        shake(profilePinBox);
+        profileEntered = '';
+        updateDots(profileEntered);
+        setTimeout(function() { profileErrEl.textContent = ''; }, 1500);
+      }
+    }
+
+    // 세션 복원: 이미 프로필 선택 완료면 바로 앱 진입
+    if (sessionStorage.getItem('clf_profile')) return;
+
+    // 프로필 선택 화면 표시
+    showProfileSelect();
+
+    // 프로필 PIN 입력 처리
+    document.querySelectorAll('.profile-pin-key').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var k = btn.getAttribute('data-k');
+        if (k === 'del') { profileEntered = profileEntered.slice(0, -1); updateDots(profileEntered); }
+        else if (profileEntered.length < 4) {
+          profileEntered += k;
+          updateDots(profileEntered);
+          if (profileEntered.length === 4) setTimeout(tryUnlockProfile, 120);
+        }
+      });
+    });
+
+    // 뒤로가기
+    document.getElementById('btn-back-to-profiles').addEventListener('click', function() {
+      profileEntered = '';
+      updateDots(profileEntered);
+      profilePinEl.style.display = 'none';
+      showProfileSelect();
+    });
+  })();
+  </script>
+
+  <div id="app-container">
+
+    <!-- 1. 대시보드 -->
+    <section id="view-dashboard" class="app-view active">
+      <header class="app-header">
+        <span class="app-title">QT라이프</span>
+        <div class="header-right">
+          <button id="btn-theme-toggle" class="icon-btn" aria-label="테마 전환"><i data-lucide="sun"></i></button>
+        </div>
+      </header>
+      <main class="view-content">
+        <div class="hero-band">
+          <div class="hero-content">
+            <div class="hero-text">
+              <h1 class="hero-greeting"><span id="display-user-name">성도</span>님,<br>오늘도 말씀과 함께</h1>
+              <p class="hero-date" id="dashboard-today-date"></p>
+            </div>
+            <div class="streak-badge">
+              <span class="streak-icon">🔥</span>
+              <div class="streak-info">
+                <span class="streak-count" id="display-streak">0</span>
+                <span class="streak-label">일 연속</span>
+              </div>
+            </div>
+          </div>
+          <div class="hero-stickers" aria-hidden="true">
+            <span class="sticker sticker-sky"></span>
+            <span class="sticker sticker-purple"></span>
+            <span class="sticker sticker-pink"></span>
+            <span class="sticker sticker-teal"></span>
+          </div>
+        </div>
+
+        <div class="calendar-card card">
+          <div class="calendar-header">
+            <button id="btn-prev-month" class="icon-btn-small"><i data-lucide="chevron-left"></i></button>
+            <h3 id="calendar-title" class="calendar-title"></h3>
+            <button id="btn-next-month" class="icon-btn-small"><i data-lucide="chevron-right"></i></button>
+          </div>
+          <div class="calendar-weekdays">
+            <span class="weekday-sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="weekday-sat">토</span>
+          </div>
+          <div id="calendar-days" class="calendar-days-grid"></div>
+        </div>
+
+        <div class="history-section">
+          <div class="section-header">
+            <h3>나의 QT 기록</h3>
+            <div class="search-box">
+              <i data-lucide="search" class="search-icon"></i>
+              <input type="text" id="search-qt" placeholder="검색...">
+            </div>
+          </div>
+          <div id="qt-list" class="qt-list-container">
+            <div class="empty-state">
+              <i data-lucide="book-open" class="empty-icon"></i>
+              <p>아직 작성된 QT가 없습니다.</p>
+              <button class="btn btn-primary" onclick="app.switchTab('write')">오늘의 QT 시작하기</button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </section>
+
+    <!-- 2. QT 작성 (본문 + 작성 통합) -->
+    <section id="view-editor" class="app-view">
+      <header class="app-header">
+        <button id="btn-editor-back" class="icon-btn"><i data-lucide="arrow-left"></i></button>
+        <h2 class="header-title" id="editor-title-text">QT 작성</h2>
+        <span class="draft-badge" id="draft-status-badge">임시저장</span>
+      </header>
+      <main class="view-content">
+        <!-- 날짜 -->
+        <div class="form-group">
+          <label for="input-date"><i data-lucide="calendar"></i> 날짜</label>
+          <input type="date" id="input-date" required>
+        </div>
+
+        <div class="scripture-search card">
+          <h4 class="section-label"><i data-lucide="book-open"></i> 오늘의 말씀</h4>
+          <input type="hidden" id="input-passage">
+          <div class="passage-title-bar">
+            <p id="passage-display" class="passage-title"></p>
+            <div class="scripture-size-controls">
+              <button id="btn-scripture-size-dec" class="scripture-size-btn">−</button>
+              <button id="btn-scripture-size-inc" class="scripture-size-btn">+</button>
+            </div>
+          </div>
+          <div id="scripture-display" class="scripture-display" contenteditable="true" spellcheck="false"></div>
+        </div>
+
+        <!-- 형광펜/밑줄 플로팅 도구 -->
+        <div id="text-format-toolbar" class="format-toolbar" style="display:none;">
+          <span id="recent-color-btns" class="recent-color-btns"></span>
+          <label class="fmt-btn fmt-color-picker-label" title="색상 선택">
+            🎨<input type="color" id="highlight-color-input">
+          </label>
+          <div class="fmt-separator"></div>
+          <button class="fmt-btn" data-action="underline" title="밑줄">U̲</button>
+          <button class="fmt-btn" data-action="clear" title="서식 제거">✕</button>
+        </div>
+
+        <!-- 묵상 작성 영역 -->
+        <form id="qt-form" class="editor-form">
+          <div class="form-group">
+            <label for="input-title"><i data-lucide="bookmark"></i> 제목</label>
+            <input type="text" id="input-title" placeholder="오늘의 QT 제목을 입력하세요." required>
+          </div>
+          <div class="form-group">
+            <label for="input-understanding"><i data-lucide="book-open"></i> 본문의 이해</label>
+            <textarea id="input-understanding" rows="3" placeholder="본문을 통해 이해한 내용이나 요약을 적어보세요."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="input-who-is-god"><i data-lucide="help-circle"></i> 하나님은 어떤 분이십니까?</label>
+            <textarea id="input-who-is-god" rows="4" placeholder="오늘 말씀에서 하나님은 어떤 분으로 계시되고 있습니까?" required></textarea>
+          </div>
+          <div class="form-group">
+            <label for="input-grace-and-thanks"><i data-lucide="gift"></i> 내가 받은 은혜와 감사</label>
+            <textarea id="input-grace-and-thanks" rows="4" placeholder="오늘 나에게 다가온 은혜와 감사한 점은 무엇입니까?" required></textarea>
+          </div>
+          <div class="form-group">
+            <label for="input-lesson"><i data-lucide="compass"></i> 내게 주시는 교훈</label>
+            <textarea id="input-lesson" rows="4" placeholder="오늘 말씀을 통해 나에게 주시는 교훈이나 경고는 무엇입니까?" required></textarea>
+          </div>
+          <div class="form-group">
+            <label for="input-application"><i data-lucide="pen-tool"></i> 적용과 실천</label>
+            <textarea id="input-application" rows="4" placeholder="발견한 교훈을 구체적으로 어떻게 삶에 적용하고 실천할 것입니까?" required></textarea>
+          </div>
+          <div class="form-group">
+            <label for="input-prayer"><i data-lucide="message-square"></i> 오늘의 기도</label>
+            <textarea id="input-prayer" rows="3" placeholder="오늘 깨달은 말씀과 결단을 붙잡고 하나님께 기도를 적어보세요."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" id="btn-editor-cancel" class="btn btn-secondary">취소</button>
+            <button type="submit" id="btn-editor-save" class="btn btn-primary">저장하기</button>
+          </div>
+        </form>
+      </main>
+    </section>
+
+    <!-- 3. QT 뷰어 -->
+    <section id="view-viewer" class="app-view">
+      <header class="app-header">
+        <button id="btn-viewer-back" class="icon-btn"><i data-lucide="arrow-left"></i></button>
+        <h2 class="header-title">QT 보기</h2>
+        <div class="header-right font-size-controls">
+          <button id="btn-font-dec" class="icon-btn-small"><i data-lucide="minus"></i></button>
+          <span class="font-label">가</span>
+          <button id="btn-font-inc" class="icon-btn-small"><i data-lucide="plus"></i></button>
+        </div>
+      </header>
+      <main class="view-content font-size-medium" id="viewer-container">
+        <article class="viewer-article">
+          <div class="viewer-meta">
+            <div class="viewer-date-wrap">
+              <span class="viewer-date" id="viewer-date"></span>
+              <span class="viewer-day" id="viewer-day"></span>
+            </div>
+          </div>
+          <h2 class="viewer-passage" id="viewer-passage"></h2>
+          <div class="viewer-section card-bible">
+            <h4 class="viewer-section-title"><i data-lucide="book-open"></i> 오늘의 말씀</h4>
+            <div class="viewer-section-body scripture-text" id="viewer-scripture"></div>
+          </div>
+          <div class="viewer-section">
+            <h4 class="viewer-section-title"><i data-lucide="bookmark"></i> 제목</h4>
+            <div class="viewer-section-body viewer-title-text" id="viewer-title"></div>
+          </div>
+          <div class="viewer-section">
+            <h4 class="viewer-section-title"><i data-lucide="book-open"></i> 본문의 이해</h4>
+            <div class="viewer-section-body" id="viewer-understanding"></div>
+          </div>
+          <div class="viewer-section">
+            <h4 class="viewer-section-title"><i data-lucide="help-circle"></i> 하나님은 어떤 분이십니까?</h4>
+            <div class="viewer-section-body" id="viewer-who-is-god"></div>
+          </div>
+          <div class="viewer-section">
+            <h4 class="viewer-section-title"><i data-lucide="gift"></i> 내가 받은 은혜와 감사</h4>
+            <div class="viewer-section-body" id="viewer-grace-and-thanks"></div>
+          </div>
+          <div class="viewer-section">
+            <h4 class="viewer-section-title"><i data-lucide="compass"></i> 내게 주시는 교훈</h4>
+            <div class="viewer-section-body" id="viewer-lesson"></div>
+          </div>
+          <div class="viewer-section">
+            <h4 class="viewer-section-title"><i data-lucide="pen-tool"></i> 적용과 실천</h4>
+            <div class="viewer-section-body" id="viewer-application"></div>
+          </div>
+          <div class="viewer-section" id="viewer-prayer-section">
+            <h4 class="viewer-section-title"><i data-lucide="message-square"></i> 오늘의 기도</h4>
+            <div class="viewer-section-body" id="viewer-prayer"></div>
+          </div>
+        </article>
+        <div class="viewer-actions">
+          <button id="btn-viewer-share" class="btn btn-primary btn-full-width"><i data-lucide="share-2"></i> QT라이프 나눔하기</button>
+          <div class="viewer-edit-delete">
+            <button id="btn-viewer-edit" class="btn btn-utility"><i data-lucide="edit"></i> 수정</button>
+            <button id="btn-viewer-delete" class="btn btn-danger-outline"><i data-lucide="trash-2"></i> 삭제</button>
+          </div>
+        </div>
+      </main>
+    </section>
+
+    <!-- 4. 설정 -->
+    <section id="view-settings" class="app-view">
+      <header class="app-header"><h2 class="header-title">설정</h2></header>
+      <main class="view-content">
+        <div class="settings-card card">
+          <h3><i data-lucide="users"></i> 계정</h3>
+          <p class="settings-help-text">현재 계정: <strong id="settings-profile-label"></strong></p>
+          <button id="btn-switch-profile" class="btn btn-utility btn-full-width"><i data-lucide="user-check"></i> 다른 계정으로 전환</button>
+        </div>
+
+        <div class="settings-card card">
+          <h3><i data-lucide="user"></i> 사용자 정보</h3>
+          <div class="form-group margin-top-sm">
+            <label for="input-username">표시 이름</label>
+            <div class="username-input-wrap">
+              <input type="text" id="input-username" placeholder="예: 김철수 성도">
+              <button id="btn-save-username" class="btn btn-primary-small">변경</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card card">
+          <h3><i data-lucide="lock"></i> 개인 암호 변경</h3>
+          <div class="form-group margin-top-sm">
+            <label for="input-current-pin">현재 암호</label>
+            <input type="password" id="input-current-pin" maxlength="4" inputmode="numeric" placeholder="현재 암호 4자리">
+          </div>
+          <div class="form-group">
+            <label for="input-new-pin">새 암호</label>
+            <input type="password" id="input-new-pin" maxlength="4" inputmode="numeric" placeholder="새 암호 4자리">
+          </div>
+          <div class="form-group">
+            <label for="input-confirm-pin">새 암호 확인</label>
+            <input type="password" id="input-confirm-pin" maxlength="4" inputmode="numeric" placeholder="새 암호 다시 입력">
+          </div>
+          <button id="btn-change-pin" class="btn btn-primary-small margin-top-sm">암호 변경</button>
+        </div>
+
+        <div class="settings-card card">
+          <h3><i data-lucide="palette"></i> 화면 모드</h3>
+          <div class="theme-selector-grid">
+            <button class="theme-btn" data-theme="light"><i data-lucide="sun"></i> 라이트</button>
+            <button class="theme-btn" data-theme="dark"><i data-lucide="moon"></i> 다크</button>
+          </div>
+        </div>
+
+        <!-- 구글 드라이브 -->
+        <div class="settings-card card">
+          <h3><i data-lucide="cloud"></i> 구글 드라이브 연동</h3>
+          <p class="settings-help-text">QT 저장 시 구글 드라이브에 자동으로 백업합니다.<br>폴더: QT라이프 → 연도 → 월</p>
+          <div id="gdrive-status" class="gdrive-status">
+            <span class="gdrive-disconnected">연결되지 않음</span>
+          </div>
+          <button id="btn-gdrive-connect" class="btn btn-utility btn-full-width">
+            <i data-lucide="log-in"></i> 구글 계정 연결
+          </button>
+          <button id="btn-gdrive-disconnect" class="btn btn-danger-outline btn-full-width" style="display:none;">
+            <i data-lucide="log-out"></i> 연결 해제
+          </button>
+        </div>
+
+        <div class="settings-card card">
+          <h3><i data-lucide="database"></i> 데이터 관리</h3>
+          <p class="settings-help-text">QT 기록은 브라우저 내부에 저장됩니다.</p>
+          <div class="backup-actions">
+            <button id="btn-export" class="btn btn-utility btn-full-width"><i data-lucide="download"></i> JSON 내보내기</button>
+            <button id="btn-import-trigger" class="btn btn-utility btn-full-width"><i data-lucide="upload"></i> JSON 가져오기</button>
+            <input type="file" id="file-import" accept=".json" style="display:none;">
+          </div>
+          <div class="danger-actions margin-top-md">
+            <button id="btn-reset-db" class="btn btn-danger-outline btn-full-width"><i data-lucide="alert-triangle"></i> 모든 기록 삭제</button>
+          </div>
+        </div>
+      </main>
+    </section>
+
+    <!-- 하단 탭 -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-tab="dashboard"><i data-lucide="home"></i><span>대시보드</span></button>
+      <button class="nav-item" data-tab="write" id="nav-item-write">
+        <div class="nav-write-btn"><i data-lucide="pen"></i></div><span>QT 작성</span>
+      </button>
+      <button class="nav-item" data-tab="settings"><i data-lucide="settings"></i><span>설정</span></button>
+    </nav>
+  </div>
+
+  <!-- 나눔 모달 -->
+  <div id="share-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i data-lucide="share-2"></i> QT라이프 나눔</h3>
+        <button id="btn-modal-close" class="close-btn"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-intro">포함할 항목을 선택하세요.</p>
+        <div class="share-checkbox-list">
+          <label class="checkbox-container"><input type="checkbox" id="share-chk-date" checked><span class="checkmark"></span>날짜</label>
+          <label class="checkbox-container"><input type="checkbox" id="share-chk-passage" checked><span class="checkmark"></span>말씀 본문</label>
+          <label class="checkbox-container"><input type="checkbox" id="share-chk-scripture"><span class="checkmark"></span>성경 구절</label>
+          <label class="checkbox-container"><input type="checkbox" id="share-chk-title" checked><span class="checkmark"></span>제목</label>
+          <label class="checkbox-container"><input type="checkbox" id="share-chk-understanding"><span class="checkmark"></span>본문의 이해</label>
+          <label class="checkbox-container"><input type="checkbox" id="share-chk-who-is-god" checked><span class="checkmark"></span>하나님은 어떤 분이십니까?</label>
+          <label class="checkbox-container"><input type="checkbox" id="share-chk-grace-and-thanks" checked><span class="checkmark"></span>내가 받은 은혜와 감사</label>
+          <label class="checkbox-container"><input type="checkbox" id="share-chk-lesson" checked><span class="checkmark"></span>내게 주시는 교훈</label>
+          <label class="checkbox-container"><input type="checkbox" id="share-chk-application" checked><span class="checkmark"></span>적용과 실천</label>
+          <label class="checkbox-container"><input type="checkbox" id="share-chk-prayer"><span class="checkmark"></span>오늘의 기도</label>
+        </div>
+        <div class="share-preview-wrap"><h4>미리보기</h4><pre id="share-preview-text"></pre></div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-share-copy" class="btn btn-primary btn-full-width"><i data-lucide="copy"></i> 복사 & 나눔</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-message" class="toast"></div>
+  <script src="bible_data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
