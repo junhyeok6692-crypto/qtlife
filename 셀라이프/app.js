@@ -1783,3 +1783,5 @@ if (getCurrentProfileId()) {
 } else {
   window._appInitCallback = function() { app.init(); };
 }
+var SUPABASE_URL = 'YOUR_SUPABASE_URL';       // ← 실제 URL로
+var SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // ← 실제 key로
