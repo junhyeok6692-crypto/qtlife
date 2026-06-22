@@ -1662,13 +1662,15 @@ const app = {
       this.updateDraftStatus(false);
       this.handleEditorInput();
     });
-    scriptureDisplay.addEventListener('mouseup', () => {
+    const checkSelection = () => {
       setTimeout(() => {
         if (this.isSelectionInside(scriptureDisplay)) {
           this.showFormatToolbar();
         }
       }, 10);
-    });
+    };
+    scriptureDisplay.addEventListener('mouseup', checkSelection);
+    scriptureDisplay.addEventListener('touchend', checkSelection);
 
     // 색상 선택기 — 선택 영역 저장 후 적용
     let savedRange = null;
