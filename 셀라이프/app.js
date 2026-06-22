@@ -1,51 +1,24 @@
 /**
- * Cell Life QT - 모바일 웹 애플리케이션 로직
+ * QT라이프 - 모바일 웹 애플리케이션 로직
  */
 
 // ==========================================================================
-// 0. 프로필 관리
+// 0. Supabase 설정
 // ==========================================================================
-const DEFAULT_PROFILES = [
-  { id: 'junhyeok', name: '준혁', pin: '0532' },
-  { id: 'dongok',   name: '동옥', pin: '0000' },
-  { id: 'geumhui',  name: '금희', pin: '0000' },
-  { id: 'yein',     name: '예인', pin: '0000' },
-  { id: 'huiwon',   name: '희원', pin: '0000' }
-];
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 
-function getProfiles() {
-  try {
-    const saved = localStorage.getItem('cell_life_profiles');
-    if (saved) {
-      const profiles = JSON.parse(saved);
-      let changed = false;
-      DEFAULT_PROFILES.forEach(dp => {
-        if (!profiles.find(p => p.id === dp.id)) {
-          profiles.push(dp);
-          changed = true;
-        }
-      });
-      if (changed) localStorage.setItem('cell_life_profiles', JSON.stringify(profiles));
-      return profiles;
-    }
-  } catch {}
-  localStorage.setItem('cell_life_profiles', JSON.stringify(DEFAULT_PROFILES));
-  return DEFAULT_PROFILES;
-}
-function saveProfiles(profiles) {
-  localStorage.setItem('cell_life_profiles', JSON.stringify(profiles));
-}
-function getCurrentProfileId() {
-  return sessionStorage.getItem('clf_profile') || '';
-}
+function getSupabase() { return window._supabaseClient || null; }
+function getCurrentUserId() { return window._currentUserId || ''; }
+function getCurrentUserName() { return window._currentUserName || '성도'; }
 
 // ==========================================================================
 // 1. 데이터 저장소 및 상태 관리 (LocalStorage DB Wrapper)
 // ==========================================================================
 const db = {
   _k(key) {
-    const pid = getCurrentProfileId();
-    return `cell_life_${pid ? pid + '_' : ''}${key}`;
+    const uid = getCurrentUserId();
+    return `cell_life_${uid ? uid + '_' : ''}${key}`;
   },
 
   getAllQts() {
@@ -86,6 +59,16 @@ const db = {
     const index = qts.findIndex(item => item.id === qt.id);
     if (index > -1) { qts[index] = qt; } else { qts.push(qt); }
     localStorage.setItem(this._k('qts'), JSON.stringify(qts));
+    const sb = getSupabase(); const uid = getCurrentUserId();
+    if (sb && uid) {
+      sb.from('qts').upsert({
+        user_id: uid, date: qt.date, passage: qt.passage || '', scripture: qt.scripture || '',
+        title: qt.title || '', understanding: qt.understanding || '', who_is_god: qt.whoIsGod || '',
+        grace_and_thanks: qt.graceAndThanks || '', lesson: qt.lesson || '',
+        application: qt.application || '', prayer: qt.prayer || '',
+        updated_at: new Date().toISOString()
+      }).then(({ error }) => { if (error) console.error('Supabase saveQt:', error); });
+    }
     return qts;
   },
 
@@ -93,20 +76,39 @@ const db = {
     let qts = this.getAllQts();
     qts = qts.filter(item => item.id !== id);
     localStorage.setItem(this._k('qts'), JSON.stringify(qts));
+    const sb = getSupabase(); const uid = getCurrentUserId();
+    if (sb && uid) {
+      sb.from('qts').delete().eq('user_id', uid).eq('date', id)
+        .then(({ error }) => { if (error) console.error('Supabase deleteQt:', error); });
+    }
     return qts;
   },
 
-  getUserName() {
-    const pid = getCurrentProfileId();
-    const profile = getProfiles().find(p => p.id === pid);
-    return profile ? profile.name : '성도';
-  },
+  getUserName() { return getCurrentUserName(); },
 
   saveUserName(name) {
-    const pid = getCurrentProfileId();
-    const profiles = getProfiles();
-    const idx = profiles.findIndex(p => p.id === pid);
-    if (idx > -1) { profiles[idx].name = name.trim() || profiles[idx].name; saveProfiles(profiles); }
+    window._currentUserName = name;
+    const sb = getSupabase(); const uid = getCurrentUserId();
+    if (sb && uid) {
+      sb.from('profiles').upsert({ id: uid, name: name })
+        .then(({ error }) => { if (error) console.error('Supabase saveUserName:', error); });
+    }
+  },
+
+  async loadFromSupabase() {
+    const sb = getSupabase(); const uid = getCurrentUserId();
+    if (!sb || !uid) return;
+    const { data, error } = await sb.from('qts').select('*').eq('user_id', uid);
+    if (error) { console.error('Supabase load error:', error); return; }
+    if (data && data.length > 0) {
+      const qts = data.map(r => ({
+        id: r.date, date: r.date, passage: r.passage || '', scripture: r.scripture || '',
+        title: r.title || '', understanding: r.understanding || '', whoIsGod: r.who_is_god || '',
+        graceAndThanks: r.grace_and_thanks || '', lesson: r.lesson || '',
+        application: r.application || '', prayer: r.prayer || ''
+      })).sort((a, b) => b.date.localeCompare(a.date));
+      localStorage.setItem(this._k('qts'), JSON.stringify(qts));
+    }
   },
 
   getTheme() { return localStorage.getItem(this._k('theme')) || 'light'; },
@@ -126,10 +128,15 @@ const db = {
   clearDraft() { localStorage.removeItem(this._k('draft')); },
 
   clearAllData() {
-    const pid = getCurrentProfileId();
+    const uid = getCurrentUserId();
     ['qts','draft','theme','font_size','gdrive_connected'].forEach(key => {
-      localStorage.removeItem(`cell_life_${pid}_${key}`);
+      localStorage.removeItem(`cell_life_${uid}_${key}`);
     });
+    const sb = getSupabase();
+    if (sb && uid) {
+      sb.from('qts').delete().eq('user_id', uid)
+        .then(({ error }) => { if (error) console.error('Supabase clearAll:', error); });
+    }
   }
 };
 
@@ -165,16 +172,16 @@ const state = {
 // 최근 사용 형광펜 색상 (LocalStorage)
 function getRecentColors() {
   try {
-    const pid = getCurrentProfileId();
-    const key = `cell_life_${pid ? pid + '_' : ''}recent_colors`;
+    const uid = getCurrentUserId();
+    const key = `cell_life_${uid ? uid + '_' : ''}recent_colors`;
     const saved = localStorage.getItem(key);
     if (saved) return JSON.parse(saved);
   } catch {}
   return ['#FFF176', '#A5D6A7', '#F48FB1'];
 }
 function saveRecentColor(color) {
-  const pid = getCurrentProfileId();
-  const key = `cell_life_${pid ? pid + '_' : ''}recent_colors`;
+  const uid = getCurrentUserId();
+  const key = `cell_life_${uid ? uid + '_' : ''}recent_colors`;
   let r = getRecentColors().filter(c => c !== color);
   r.unshift(color);
   localStorage.setItem(key, JSON.stringify(r.slice(0, 3)));
@@ -341,8 +348,23 @@ function calculateStreak(qts) {
 // 4. 앱 초기화 및 네비게이션 제어
 // ==========================================================================
 const app = {
-  init() {
-    // 프로필별 데이터 로드
+  async init(session) {
+    // Supabase 세션에서 사용자 정보 설정
+    if (session) {
+      window._currentUserId = session.user.id;
+      window._currentUserName = session.user.user_metadata?.name || session.user.email.split('@')[0];
+      // 프로필 테이블에서 이름 가져오기
+      const sb = getSupabase();
+      if (sb) {
+        const { data } = await sb.from('profiles').select('name').eq('id', session.user.id).single();
+        if (data && data.name) window._currentUserName = data.name;
+      }
+      // 이메일 설정 표시 업데이트
+      const emailLabel = document.getElementById('settings-email-label');
+      if (emailLabel) emailLabel.textContent = session.user.email;
+    }
+
+    // 데이터 로드
     state.userName = db.getUserName();
     state.theme = db.getTheme();
     state.fontSize = db.getFontSize();
@@ -376,6 +398,14 @@ const app = {
 
     // Lucide 아이콘 초기화
     safeCreateIcons();
+
+    // Supabase에서 최신 데이터 동기화 (백그라운드)
+    db.loadFromSupabase().then(() => {
+      state.qts = db.getAllQts();
+      this.renderQtList();
+      this.renderCalendar();
+      this.renderStreak();
+    });
   },
 
   // 탭 화면 전환
@@ -457,25 +487,12 @@ const app = {
     if (profileLabel) profileLabel.textContent = state.userName;
   },
 
-  switchProfile() {
-    sessionStorage.removeItem('clf_profile');
+  async signOut() {
+    const sb = getSupabase();
+    if (sb) await sb.auth.signOut();
+    window._currentUserId = '';
+    window._currentUserName = '';
     location.reload();
-  },
-
-  changePin(currentPin, newPin, confirmPin) {
-    const pid = getCurrentProfileId();
-    const profiles = getProfiles();
-    const idx = profiles.findIndex(p => p.id === pid);
-    if (idx === -1) { this.showToast('프로필을 찾을 수 없습니다.'); return; }
-    if (currentPin !== profiles[idx].pin) { this.showToast('현재 암호가 틀렸습니다.'); return; }
-    if (!/^\d{4}$/.test(newPin)) { this.showToast('새 암호는 숫자 4자리여야 합니다.'); return; }
-    if (newPin !== confirmPin) { this.showToast('새 암호가 일치하지 않습니다.'); return; }
-    profiles[idx].pin = newPin;
-    saveProfiles(profiles);
-    document.getElementById('input-current-pin').value = '';
-    document.getElementById('input-new-pin').value = '';
-    document.getElementById('input-confirm-pin').value = '';
-    this.showToast('암호가 변경되었습니다.');
   },
 
   // 스트릭(연속 묵상) 렌더링
@@ -1753,16 +1770,8 @@ const app = {
     // 설정: 전체 데이터 초기화
     document.getElementById('btn-reset-db').addEventListener('click', () => this.resetDatabase());
 
-    // 설정: 계정 전환
-    document.getElementById('btn-switch-profile').addEventListener('click', () => this.switchProfile());
-
-    // 설정: 개인 암호 변경
-    document.getElementById('btn-change-pin').addEventListener('click', () => {
-      const c = document.getElementById('input-current-pin').value;
-      const n = document.getElementById('input-new-pin').value;
-      const r = document.getElementById('input-confirm-pin').value;
-      this.changePin(c, n, r);
-    });
+    // 설정: 로그아웃
+    document.getElementById('btn-logout').addEventListener('click', () => this.signOut());
   }
 };
 
@@ -1777,11 +1786,5 @@ function safeCreateIcons() {
   }
 }
 
-// 프로필이 선택된 경우 바로 init, 아니면 프로필 선택 완료 후 init
-if (getCurrentProfileId()) {
-  app.init();
-} else {
-  window._appInitCallback = function() { app.init(); };
-}
-var SUPABASE_URL = 'YOUR_SUPABASE_URL';       // ← 실제 URL로
-var SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // ← 실제 key로
+// Supabase 로그인 완료 후 init 호출
+window._appInitCallback = function(session) { app.init(session); };

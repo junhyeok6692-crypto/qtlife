@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
@@ -16,168 +17,99 @@
 </head>
 <body class="light-mode">
 
-  <!-- 프로필 선택 화면 -->
-  <div id="profile-select" style="display:none;">
-    <div class="profile-select-box">
+  <!-- 로그인 화면 -->
+  <div id="auth-screen" style="display:flex;">
+    <div class="auth-box">
       <div class="pin-bird">🕊️</div>
       <h1 class="pin-title">QT라이프</h1>
-      <p class="pin-subtitle">계정을 선택하세요</p>
-      <div class="profile-grid" id="profile-grid"></div>
-    </div>
-  </div>
 
-  <!-- 프로필 PIN 화면 -->
-  <div id="profile-pin-overlay" style="display:none;">
-    <div class="pin-box" id="profile-pin-box">
-      <div class="profile-pin-avatar" id="profile-pin-avatar"></div>
-      <h1 class="pin-title" id="profile-pin-name"></h1>
-      <p class="pin-subtitle">암호를 입력하세요</p>
-      <div class="pin-dots" id="profile-pin-dots">
-        <span></span><span></span><span></span><span></span>
+      <div id="auth-login-panel" class="auth-panel">
+        <p class="pin-subtitle">말씀과 함께하는 하루</p>
+        <input type="email" id="auth-email" class="auth-input" placeholder="이메일" autocomplete="email">
+        <input type="password" id="auth-password" class="auth-input" placeholder="비밀번호" autocomplete="current-password">
+        <p id="auth-msg" class="auth-msg"></p>
+        <button id="btn-do-login" class="auth-submit-btn">로그인</button>
+        <button id="btn-to-signup" class="auth-switch-btn">처음이신가요? 회원가입</button>
       </div>
-      <p class="pin-error-msg" id="profile-pin-error"></p>
-      <div class="pin-pad">
-        <button class="pin-key profile-pin-key" data-k="1">1</button>
-        <button class="pin-key profile-pin-key" data-k="2">2</button>
-        <button class="pin-key profile-pin-key" data-k="3">3</button>
-        <button class="pin-key profile-pin-key" data-k="4">4</button>
-        <button class="pin-key profile-pin-key" data-k="5">5</button>
-        <button class="pin-key profile-pin-key" data-k="6">6</button>
-        <button class="pin-key profile-pin-key" data-k="7">7</button>
-        <button class="pin-key profile-pin-key" data-k="8">8</button>
-        <button class="pin-key profile-pin-key" data-k="9">9</button>
-        <button class="pin-key pin-key-del profile-pin-key" data-k="del">⌫</button>
-        <button class="pin-key profile-pin-key" data-k="0">0</button>
-        <div></div>
+
+      <div id="auth-signup-panel" class="auth-panel" style="display:none;">
+        <p class="pin-subtitle">새 계정 만들기</p>
+        <input type="text" id="signup-name" class="auth-input" placeholder="이름 (예: 준혁)">
+        <input type="email" id="signup-email" class="auth-input" placeholder="이메일">
+        <input type="password" id="signup-pw" class="auth-input" placeholder="비밀번호 (6자 이상)">
+        <input type="password" id="signup-pw2" class="auth-input" placeholder="비밀번호 확인">
+        <p id="signup-msg" class="auth-msg"></p>
+        <button id="btn-do-signup" class="auth-submit-btn">가입하기</button>
+        <button id="btn-to-login" class="auth-switch-btn">이미 계정이 있으신가요? 로그인</button>
       </div>
-      <button id="btn-back-to-profiles" class="profile-back-btn">← 다른 계정</button>
     </div>
   </div>
 
   <script>
   (function() {
-    var DEFAULT_PROFILES = [
-      { id: 'junhyeok', name: '준혁', pin: '0532' },
-      { id: 'dongok',   name: '동옥', pin: '0000' },
-      { id: 'geumhui',  name: '금희', pin: '0000' },
-      { id: 'yein',     name: '예인', pin: '0000' },
-      { id: 'huiwon',   name: '희원', pin: '0000' }
-    ];
+    var SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    var SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 
-    var profileSelectEl = document.getElementById('profile-select');
-    var profilePinEl    = document.getElementById('profile-pin-overlay');
-    var profilePinBox   = document.getElementById('profile-pin-box');
-    var profilePinDots  = document.querySelectorAll('#profile-pin-dots span');
-    var profileErrEl    = document.getElementById('profile-pin-error');
-
-    var profileEntered = '';
-    var selectedProfile = null;
-
-    function getStoredProfiles() {
-      try {
-        var s = localStorage.getItem('cell_life_profiles');
-        if (s) {
-          var profiles = JSON.parse(s);
-          var changed = false;
-          DEFAULT_PROFILES.forEach(function(dp) {
-            if (!profiles.find(function(p) { return p.id === dp.id; })) {
-              profiles.push(dp);
-              changed = true;
-            }
-          });
-          if (changed) localStorage.setItem('cell_life_profiles', JSON.stringify(profiles));
-          return profiles;
-        }
-      } catch(e) {}
-      return DEFAULT_PROFILES;
-    }
-    function updateDots(entered) {
-      profilePinDots.forEach(function(d, i) { d.classList.toggle('filled', i < entered.length); });
-    }
-    function shake(el) {
-      el.classList.add('pin-shake');
-      setTimeout(function() { el.classList.remove('pin-shake'); }, 450);
+    var authScreen = document.getElementById('auth-screen');
+    function hideAuth() { authScreen.style.display = 'none'; }
+    function showMsg(id, text, isSuccess) {
+      var el = document.getElementById(id);
+      el.textContent = text;
+      el.className = 'auth-msg' + (isSuccess ? ' success' : '');
     }
 
-    function makeProfileCard(p) {
-      var btn = document.createElement('button');
-      btn.className = 'profile-card';
-      btn.innerHTML = '<div class="profile-avatar">' + p.name[0] + '</div><span class="profile-name">' + p.name + '</span>';
-      btn.addEventListener('click', function() {
-        selectedProfile = p;
-        profileEntered = '';
-        updateDots(profileEntered);
-        profileErrEl.textContent = '';
-        document.getElementById('profile-pin-avatar').textContent = p.name[0];
-        document.getElementById('profile-pin-name').textContent = p.name;
-        profileSelectEl.style.display = 'none';
-        profilePinEl.style.display = 'flex';
+    function initSupabase() {
+      if (typeof supabase === 'undefined' || !supabase.createClient) return;
+      var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      window._supabaseClient = sb;
+      sb.auth.getSession().then(function(r) {
+        var session = r.data && r.data.session;
+        if (session) { hideAuth(); if (typeof window._appInitCallback === 'function') window._appInitCallback(session); }
       });
-      return btn;
-    }
-    function showProfileSelect() {
-      profileSelectEl.style.display = 'flex';
-      var grid = document.getElementById('profile-grid');
-      grid.innerHTML = '';
-      var profiles = getStoredProfiles();
-      var row1Ids = ['dongok', 'geumhui'];
-      var row2Ids = ['junhyeok', 'yein', 'huiwon'];
-      var row1 = document.createElement('div'); row1.className = 'profile-row';
-      var row2 = document.createElement('div'); row2.className = 'profile-row';
-      row1Ids.forEach(function(id) {
-        var p = profiles.find(function(x) { return x.id === id; });
-        if (p) row1.appendChild(makeProfileCard(p));
-      });
-      row2Ids.forEach(function(id) {
-        var p = profiles.find(function(x) { return x.id === id; });
-        if (p) row2.appendChild(makeProfileCard(p));
-      });
-      grid.appendChild(row1);
-      grid.appendChild(row2);
     }
 
-    function tryUnlockProfile() {
-      var profiles = getStoredProfiles();
-      var p = profiles.find(function(x) { return x.id === selectedProfile.id; });
-      var correctPin = p ? p.pin : selectedProfile.pin;
-      if (profileEntered === correctPin) {
-        sessionStorage.setItem('clf_profile', selectedProfile.id);
-        profilePinEl.style.display = 'none';
-        if (typeof window._appInitCallback === 'function') window._appInitCallback();
-      } else {
-        profileErrEl.textContent = '암호가 틀렸습니다';
-        shake(profilePinBox);
-        profileEntered = '';
-        updateDots(profileEntered);
-        setTimeout(function() { profileErrEl.textContent = ''; }, 1500);
-      }
-    }
+    if (typeof supabase !== 'undefined') { initSupabase(); }
+    else { window.addEventListener('load', initSupabase); }
 
-    // 세션 복원: 이미 프로필 선택 완료면 바로 앱 진입
-    if (sessionStorage.getItem('clf_profile')) return;
-
-    // 프로필 선택 화면 표시
-    showProfileSelect();
-
-    // 프로필 PIN 입력 처리
-    document.querySelectorAll('.profile-pin-key').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var k = btn.getAttribute('data-k');
-        if (k === 'del') { profileEntered = profileEntered.slice(0, -1); updateDots(profileEntered); }
-        else if (profileEntered.length < 4) {
-          profileEntered += k;
-          updateDots(profileEntered);
-          if (profileEntered.length === 4) setTimeout(tryUnlockProfile, 120);
-        }
+    document.getElementById('btn-do-login').addEventListener('click', function() {
+      var email = document.getElementById('auth-email').value.trim();
+      var pw = document.getElementById('auth-password').value;
+      if (!email || !pw) { showMsg('auth-msg', '이메일과 비밀번호를 입력하세요.'); return; }
+      var btn = this; btn.textContent = '로그인 중...'; btn.disabled = true;
+      window._supabaseClient.auth.signInWithPassword({ email: email, password: pw }).then(function(r) {
+        btn.textContent = '로그인'; btn.disabled = false;
+        if (r.error) { showMsg('auth-msg', '이메일 또는 비밀번호가 올바르지 않습니다.'); }
+        else { hideAuth(); if (typeof window._appInitCallback === 'function') window._appInitCallback(r.data.session); }
       });
     });
 
-    // 뒤로가기
-    document.getElementById('btn-back-to-profiles').addEventListener('click', function() {
-      profileEntered = '';
-      updateDots(profileEntered);
-      profilePinEl.style.display = 'none';
-      showProfileSelect();
+    document.getElementById('btn-do-signup').addEventListener('click', function() {
+      var name = document.getElementById('signup-name').value.trim();
+      var email = document.getElementById('signup-email').value.trim();
+      var pw = document.getElementById('signup-pw').value;
+      var pw2 = document.getElementById('signup-pw2').value;
+      if (!name || !email || !pw) { showMsg('signup-msg', '모든 항목을 입력하세요.'); return; }
+      if (pw.length < 6) { showMsg('signup-msg', '비밀번호는 6자 이상이어야 합니다.'); return; }
+      if (pw !== pw2) { showMsg('signup-msg', '비밀번호가 일치하지 않습니다.'); return; }
+      var btn = this; btn.textContent = '처리 중...'; btn.disabled = true;
+      window._supabaseClient.auth.signUp({ email: email, password: pw, options: { data: { name: name } } }).then(function(r) {
+        btn.textContent = '가입하기'; btn.disabled = false;
+        if (r.error) { showMsg('signup-msg', r.error.message); }
+        else if (r.data.session) { hideAuth(); if (typeof window._appInitCallback === 'function') window._appInitCallback(r.data.session); }
+        else { showMsg('signup-msg', '가입 완료! 이메일을 확인하여 인증을 완료하세요.', true); }
+      });
+    });
+
+    document.getElementById('btn-to-signup').addEventListener('click', function() {
+      document.getElementById('auth-login-panel').style.display = 'none';
+      document.getElementById('auth-signup-panel').style.display = 'flex';
+    });
+    document.getElementById('btn-to-login').addEventListener('click', function() {
+      document.getElementById('auth-signup-panel').style.display = 'none';
+      document.getElementById('auth-login-panel').style.display = 'flex';
+    });
+    document.getElementById('auth-password').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') document.getElementById('btn-do-login').click();
     });
   })();
   </script>
@@ -391,8 +323,9 @@
       <main class="view-content">
         <div class="settings-card card">
           <h3><i data-lucide="users"></i> 계정</h3>
-          <p class="settings-help-text">현재 계정: <strong id="settings-profile-label"></strong></p>
-          <button id="btn-switch-profile" class="btn btn-utility btn-full-width"><i data-lucide="user-check"></i> 다른 계정으로 전환</button>
+          <p class="settings-help-text">이름: <strong id="settings-profile-label"></strong></p>
+          <p class="settings-help-text" id="settings-email-label" style="font-size:12px;opacity:.6;margin-top:-6px"></p>
+          <button id="btn-logout" class="btn btn-danger-outline btn-full-width" style="margin-top:8px"><i data-lucide="log-out"></i> 로그아웃</button>
         </div>
 
         <div class="settings-card card">
@@ -404,23 +337,6 @@
               <button id="btn-save-username" class="btn btn-primary-small">변경</button>
             </div>
           </div>
-        </div>
-
-        <div class="settings-card card">
-          <h3><i data-lucide="lock"></i> 개인 암호 변경</h3>
-          <div class="form-group margin-top-sm">
-            <label for="input-current-pin">현재 암호</label>
-            <input type="password" id="input-current-pin" maxlength="4" inputmode="numeric" placeholder="현재 암호 4자리">
-          </div>
-          <div class="form-group">
-            <label for="input-new-pin">새 암호</label>
-            <input type="password" id="input-new-pin" maxlength="4" inputmode="numeric" placeholder="새 암호 4자리">
-          </div>
-          <div class="form-group">
-            <label for="input-confirm-pin">새 암호 확인</label>
-            <input type="password" id="input-confirm-pin" maxlength="4" inputmode="numeric" placeholder="새 암호 다시 입력">
-          </div>
-          <button id="btn-change-pin" class="btn btn-primary-small margin-top-sm">암호 변경</button>
         </div>
 
         <div class="settings-card card">
@@ -505,5 +421,3 @@
   <script src="app.js"></script>
 </body>
 </html>
-var SUPABASE_URL = 'YOUR_SUPABASE_URL';       // ← 실제 URL로
-var SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // ← 실제 key로
