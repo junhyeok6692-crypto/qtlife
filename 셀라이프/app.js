@@ -5,8 +5,8 @@
 // ==========================================================================
 // 0. Supabase 설정
 // ==========================================================================
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL =https://lvweuexyrirmdtmdhagw.supabase.co
+const SUPABASE_ANON_KEY =sb_publishable_NI_tXMu_Xy31GFyYzOTotA_YXo2rf94
 
 function getSupabase() { return window._supabaseClient || null; }
 function getCurrentUserId() { return window._currentUserId || ''; }
