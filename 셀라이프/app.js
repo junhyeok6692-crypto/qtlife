@@ -5,8 +5,8 @@
 // ==========================================================================
 // 0. Supabase 설정
 // ==========================================================================
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL = 'https://lvweuexyrirmdtmdhagw.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_NI_tXMu_Xy31GFyYzOTotA_YXo2rf94';
 
 function getSupabase() { return window._supabaseClient || null; }
 function getCurrentUserId() { return window._currentUserId || ''; }
@@ -349,20 +349,8 @@ function calculateStreak(qts) {
 // ==========================================================================
 const app = {
   async init(session) {
-    // Supabase 세션에서 사용자 정보 설정
-    if (session) {
-      window._currentUserId = session.user.id;
-      window._currentUserName = session.user.user_metadata?.name || session.user.email.split('@')[0];
-      // 프로필 테이블에서 이름 가져오기
-      const sb = getSupabase();
-      if (sb) {
-        const { data } = await sb.from('profiles').select('name').eq('id', session.user.id).single();
-        if (data && data.name) window._currentUserName = data.name;
-      }
-      // 이메일 설정 표시 업데이트
-      const emailLabel = document.getElementById('settings-email-label');
-      if (emailLabel) emailLabel.textContent = session.user.email;
-    }
+    // 로컬 PIN 로그인 방식: window._currentUserId, _currentUserName은 이미 설정됨
+    if (!window._currentUserId) { location.reload(); return; }
 
     // 데이터 로드
     state.userName = db.getUserName();
@@ -485,14 +473,28 @@ const app = {
     document.getElementById('input-username').value = state.userName;
     const profileLabel = document.getElementById('settings-profile-label');
     if (profileLabel) profileLabel.textContent = state.userName;
+    const emailLabel = document.getElementById('settings-email-label');
+    if (emailLabel) emailLabel.textContent = '';
   },
 
-  async signOut() {
-    const sb = getSupabase();
-    if (sb) await sb.auth.signOut();
+  signOut() {
     window._currentUserId = '';
     window._currentUserName = '';
+    window._currentProfileId = '';
     location.reload();
+  },
+
+  changePassword(newPw, confirmPw) {
+    if (!newPw) { this.showToast('새 비밀번호를 입력하세요.'); return; }
+    if (newPw.length < 6) { this.showToast('비밀번호는 6자 이상이어야 합니다.'); return; }
+    if (!/[a-zA-Z]/.test(newPw) || !/[0-9]/.test(newPw)) { this.showToast('영문과 숫자를 모두 포함해야 합니다.'); return; }
+    if (newPw !== confirmPw) { this.showToast('비밀번호가 일치하지 않습니다.'); return; }
+    const profileId = window._currentProfileId;
+    if (!profileId) { this.showToast('프로필 정보를 찾을 수 없습니다.'); return; }
+    localStorage.setItem('qt_pin_' + profileId, newPw);
+    document.getElementById('input-new-pw').value = '';
+    document.getElementById('input-confirm-pw').value = '';
+    this.showToast('비밀번호가 변경되었습니다.');
   },
 
   // 스트릭(연속 묵상) 렌더링
@@ -1772,6 +1774,11 @@ const app = {
 
     // 설정: 로그아웃
     document.getElementById('btn-logout').addEventListener('click', () => this.signOut());
+    document.getElementById('btn-change-pw').addEventListener('click', () => {
+      const newPw = document.getElementById('input-new-pw').value;
+      const confirmPw = document.getElementById('input-confirm-pw').value;
+      this.changePassword(newPw, confirmPw);
+    });
   }
 };
 
